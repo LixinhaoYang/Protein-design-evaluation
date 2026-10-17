@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 try:
-    from .common import TEMPLATES, identifier, load_cases, nonnegative_int, positive_float, positive_int, require_file, restart_step, tcl_list, tcl_word
+    from .common import DEFAULT_PARAMETER_FILES, TEMPLATES, identifier, load_cases, nonnegative_int, positive_float, positive_int, require_file, restart_step, tcl_list, tcl_word
 except ImportError:
-    from common import TEMPLATES, identifier, load_cases, nonnegative_int, positive_float, positive_int, require_file, restart_step, tcl_list, tcl_word
+    from common import DEFAULT_PARAMETER_FILES, TEMPLATES, identifier, load_cases, nonnegative_int, positive_float, positive_int, require_file, restart_step, tcl_list, tcl_word
 
 
 def configure(args) -> list[Path]:
@@ -33,6 +33,10 @@ def configure(args) -> list[Path]:
         raise ValueError("restart segments must not minimize again; use --minimize-steps 0")
     if args.run_steps % 10 or minimize % 10 or args.output_every % 10 or args.energy_every % 10:
         raise ValueError("step counts and output intervals must be multiples of the template's 10-step cycle")
+    parameter_files = [path.resolve() for path in (args.parameter or DEFAULT_PARAMETER_FILES)]
+    if args.parameter is None:
+        for path in parameter_files:
+            require_file(path)
     template = (TEMPLATES / "namd.tcl").read_text()
     plans = []
     for case_dir, metadata in cases:
@@ -62,7 +66,7 @@ def configure(args) -> list[Path]:
                 raise ValueError("restart prefix would collide with new output files")
             first_step = restart_step(Path(prefix))
         settings = {
-            "segment": tcl_word(args.segment), "parameter_files": tcl_list(path.resolve() for path in args.parameter),
+            "segment": tcl_word(args.segment), "parameter_files": tcl_list(parameter_files),
             "box_lengths": tcl_list(lengths), "box_origin": tcl_list(origin),
             "restart_prefix": tcl_word(prefix), "restart_relative": int(bool(args.restart_from)),
             "timestep_fs": timestep, "run_steps": args.run_steps, "minimize_steps": minimize,
@@ -90,8 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--segment", required=True, help="new segment name, such as equilibration or production")
     parser.add_argument("--run-steps", type=positive_int, required=True, help="additional integration steps for this segment")
     parser.add_argument("--minimize-steps", type=nonnegative_int, help="initial default: 200; restart default: 0")
-    parser.add_argument("--parameter", type=Path, action="append", required=True,
-                        help="external CHARMM parameter file; repeat in loading order; must exist on the NAMD host")
+    parser.add_argument("--parameter", type=Path, action="append",
+                        help="CHARMM parameter file; repeat to override the local water/ion, CHARMM36m-protein, NBFIX defaults")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--restart-from", help="previous segment in each system's out directory; reads SEGMENT.restart.{coor,vel,xsc}")
     group.add_argument("--restart-prefix", type=Path, help="explicit existing restart prefix for one selected system")

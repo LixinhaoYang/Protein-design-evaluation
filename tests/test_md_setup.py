@@ -96,6 +96,14 @@ class PreparationTests(QuietTest):
             with self.assertRaisesRegex(ValueError, "multiple fragments"):
                 prepare.normalize_pdb(source, directory / "protein.pdb", "A", "candidate_001")
 
+    def test_selecting_a_later_chain_does_not_inherit_an_earlier_ter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            source = directory / "input.pdb"
+            source.write_text(atom(1, 1, 0.0, chain="A") + "TER\n" + atom(2, 4, 2.0, chain="B"))
+            rows = prepare.normalize_pdb(source, directory / "protein.pdb", "B", "candidate_001")
+            self.assertEqual([row["input_residue_number"] for row in rows], ["4"])
+
     def test_preparation_records_success_only_after_vmd_outputs(self):
         with tempfile.TemporaryDirectory(prefix="md setup with spaces ") as tmp:
             directory = Path(tmp)
@@ -330,6 +338,7 @@ class SlurmTests(QuietTest):
             self.assertIn("--gres=gpu:TEST:2", text)
             self.assertIn("--dependency=afterok:123:456", text)
             self.assertIn("+p8", text)
+            self.assertIn("+setcpuaffinity +devices 0,1", text)
             checked = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
             self.assertEqual(checked.returncode, 0, checked.stderr)
 

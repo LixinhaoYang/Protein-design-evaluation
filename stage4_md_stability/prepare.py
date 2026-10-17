@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 
 try:
-    from .common import TEMPLATES, identifier, nonnegative_float, positive_float, require_file, tcl_list, tcl_word, write_json
+    from .common import DEFAULT_TOPOLOGY_FILES, TEMPLATES, identifier, nonnegative_float, positive_float, require_file, tcl_list, tcl_word, write_json
 except ImportError:
-    from common import TEMPLATES, identifier, nonnegative_float, positive_float, require_file, tcl_list, tcl_word, write_json
+    from common import DEFAULT_TOPOLOGY_FILES, TEMPLATES, identifier, nonnegative_float, positive_float, require_file, tcl_list, tcl_word, write_json
 
 
 STANDARD_RESIDUES = frozenset("ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL".split())
@@ -34,7 +34,8 @@ def normalize_pdb(source: Path, output: Path, chain: str, sequence_id: str) -> l
     chain = " " if chain == "_" else chain
     residues: dict[tuple[str, str], dict] = {}
     models = 0
-    chain_ended = False
+    selected_chain_ended = False
+    previous_atom_chain = None
     for line in source.read_text().splitlines():
         if line.startswith("MODEL "):
             models += 1
@@ -42,16 +43,26 @@ def normalize_pdb(source: Path, output: Path, chain: str, sequence_id: str) -> l
                 raise ValueError(f"{source}: multiple models are not supported")
         if line.startswith("SSBOND"):
             raise ValueError(f"{source}: disulfide patching is not supported by this preparer")
-        if line.startswith("TER") and residues:
-            chain_ended = True
-        if not line.startswith(("ATOM  ", "HETATM")) or line[21:22] != chain:
+        if line.startswith("TER"):
+            # A TER record belongs to its preceding chain; some writers also
+            # populate its chain field.  Do not mistake a preceding chain's
+            # TER for a break in a later selected chain.
+            if line[21:22] == chain or previous_atom_chain == chain:
+                selected_chain_ended = True
+            previous_atom_chain = None
+            continue
+        if not line.startswith(("ATOM  ", "HETATM")):
+            continue
+        atom_chain = line[21:22]
+        previous_atom_chain = atom_chain
+        if atom_chain != chain:
             continue
         resname = line[17:20].strip()
         if resname in {"HOH", "WAT", "TIP3"}:
             continue
         if resname not in STANDARD_RESIDUES:
             raise ValueError(f"{source}: unsupported selected-chain residue {resname!r}")
-        if chain_ended:
+        if selected_chain_ended:
             raise ValueError(f"{source}: multiple fragments in the selected chain are not supported")
         key = (line[22:26].strip(), line[26:27].strip())
         int(key[0])
@@ -135,7 +146,7 @@ def prepare(args) -> Path:
     vmd = shutil.which(args.vmd)
     if not vmd:
         raise ValueError("VMD executable not found; set --vmd or VMD_BIN")
-    topologies = [path.resolve() for path in args.topology]
+    topologies = [path.resolve() for path in (args.topology or DEFAULT_TOPOLOGY_FILES)]
     for path in topologies:
         require_file(path)
     root = args.outdir.resolve()
@@ -198,8 +209,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chain", default="A", help="PDB chain to extract; '_' selects a blank chain")
     parser.add_argument("--outdir", type=Path, required=True)
     parser.add_argument("--vmd", default=os.environ.get("VMD_BIN", "vmd"))
-    parser.add_argument("--topology", type=Path, action="append", required=True,
-                        help="external CHARMM protein topology; repeat for additional files")
+    parser.add_argument("--topology", type=Path, action="append",
+                        help="CHARMM topology file; repeat to override the local CHARMM36m protein/water-ion defaults")
     parser.add_argument("--padding", type=positive_float, default=25.0, help="water padding on each face in Angstrom")
     parser.add_argument("--salt-molar", type=nonnegative_float, default=0.15, help="KCl concentration passed to autoionize")
     parser.add_argument("--hmr", action="store_true", help="repartition solute hydrogen masses to 3.024 Da")

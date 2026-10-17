@@ -2,7 +2,7 @@
 
 > **Works on my machine; not guaranteed to work on other machines or clusters.**
 
-The original workflow was used in the author's environment. This version extracts its reusable preparation and execution logic, removes site-specific settings, and fixes several portability issues. It has synthetic regression tests, but has not been validated end to end on real systems across VMD/NAMD installations or clusters.
+The original workflow was used in the author's environment. This version retains its CHARMM36m parameter combination and NAMD 3 CUDA/Slurm defaults, while exposing command-line overrides. It has synthetic regression tests, but has not been validated end to end on real systems.
 
 This stage prepares selected designs for optional MD simulations after fold/motif recovery. It provides system building, NAMD configuration, and Slurm script generation. Trajectory analysis and integration of MD metrics into the triage table are not implemented yet. A prepared system or a completed simulation is not assigned a stability `PASS`.
 
@@ -10,8 +10,8 @@ This stage prepares selected designs for optional MD simulations after fold/moti
 
 - Python 3.10+; the Stage 4 commands use the standard library.
 - VMD with PSFGEN, Solvate, and Autoionize plugins for system preparation. Supply its executable with `--vmd` or `VMD_BIN`.
-- Your own compatible CHARMM topology and parameter files. Files are not bundled, and parameter loading order is explicit.
-- A single-node multicore NAMD executable on the simulation host. The Slurm launcher uses one process with `+p` CPU threads; MPI/multi-node launchers are outside this template's scope.
+- The local default force field is `top_all36_prot.rtf` plus `toppar_water_ions.str` for PSF building, and `toppar_water_ions_modified.prm`, `par_all36m_prot.prm`, and `NBFIX.str` for NAMD. They are read from `/storage/home/hcoda1/9/lyang403/r-jcgumbart-0/ParamFiles`, or from `STAGE4_PARAMDIR` when set.
+- The local default NAMD executable is `/storage/project/r-jcgumbart-0/jcgumbart/software/NAMD_3.0.2_Linux-x86_64-multicore-CUDA/namd3`. It is a single-node CUDA build. The Slurm launcher runs one process with `+p` CPU threads, `+setcpuaffinity`, and explicit NAMD GPU devices; MPI/multi-node launchers are outside this template's scope.
 - Slurm only if using the provided job-script generator.
 
 The preparer accepts one selected chain of standard amino acids in **PDB** format. Convert AF3 mmCIF files to PDB first and verify chain IDs and residue numbering. Select whether the starting structure is from the design method or AF3 using `--source design|af3`; it is never inferred from the filename.
@@ -27,8 +27,6 @@ Run from the repository root. All paths below are placeholders for your own inpu
 ```bash
 python stage4_md_stability/prepare.py inputs/af3_pdbs/candidate_001.pdb \
   --source af3 --sequence-id candidate_001 --chain A \
-  --topology /path/to/top_all36_prot.rtf \
-  --vmd /path/to/vmd \
   --outdir results/md_batch
 ```
 
@@ -47,8 +45,7 @@ candidate_002,models/candidate_002.pdb,design,A
 ```bash
 python stage4_md_stability/prepare.py \
   --case-csv inputs/md_cases.csv \
-  --topology /path/to/top_all36_prot.rtf \
-  --vmd /path/to/vmd --outdir results/md_batch
+  --outdir results/md_batch
 ```
 
 Paths in the case CSV are relative to that CSV. Candidate IDs must be unique, start with a letter or digit, and contain at most 80 letters, digits, dots, underscores, or hyphens. Use the same IDs as Stages 1–3. `chain_id` is optional and defaults to `--chain A`; use `_` for a blank PDB chain.
@@ -71,18 +68,15 @@ Intermediate preparation files remain inside each case directory. Only successfu
 
 ## 2. Generate NAMD configurations
 
-Transfer the prepared batch to the simulation host if needed, then generate configurations there. Supply your actual compatible parameter files, in the required loading order:
+Generate configurations on the simulation host. By default this uses the local water/ion, CHARMM36m protein, and NBFIX parameter combination in the order used by the original workflow:
 
 ```bash
 python stage4_md_stability/configure.py \
   --manifest results/md_batch/systems.json \
-  --segment equilibration --run-steps 250000 --minimize-steps 2000 \
-  --parameter /path/to/protein.prm \
-  --parameter /path/to/water_ions.prm \
-  --parameter /path/to/nbfix.prm
+  --segment equilibration --run-steps 250000 --minimize-steps 2000
 ```
 
-This writes `candidate_001/conf/equilibration.conf` for each system, without starting NAMD. Use repeated `--sequence-id` options to select a subset. Parameter paths must exist on the NAMD host; configuration generation does not inspect their contents. Generated configurations check their presence at run time.
+This writes `candidate_001/conf/equilibration.conf` for each system, without starting NAMD. Use repeated `--sequence-id` options to select a subset. Pass repeated `--parameter` options only to replace the complete default parameter list; their order is preserved. Generated configurations check every input at run time.
 
 The example step counts illustrate configuration syntax; they are **not** a validated equilibration schedule. Choose minimization, equilibration, restraints, replicates, and production duration for your system. The supplied NPT template has no positional restraints or heating schedule; naming a segment `equilibration` does not establish equilibration.
 
@@ -106,10 +100,7 @@ After a previous run has produced a consistent `equilibration.restart.coor`, `.v
 ```bash
 python stage4_md_stability/configure.py \
   --manifest results/md_batch/systems.json \
-  --segment production --restart-from equilibration --run-steps 5000000 \
-  --parameter /path/to/protein.prm \
-  --parameter /path/to/water_ions.prm \
-  --parameter /path/to/nbfix.prm
+  --segment production --restart-from equilibration --run-steps 5000000
 ```
 
 Restart mode loads coordinates, velocities, and periodic cell state, and resumes timestep numbering from the XSC file. It does not minimize or reinitialize velocities. `--run-steps` adds time to the restart step. If a job stopped partway through production, continue under a new segment name, for example `production_2 --restart-from production`.
@@ -120,12 +111,10 @@ For one selected system, `--restart-prefix /path/to/existing.restart` can refere
 
 ```bash
 python stage4_md_stability/slurm.py results/md_batch/*/conf/equilibration.conf \
-  --namd /path/on/cluster/to/namd3 \
-  --time 24:00:00 --cpus 6 --gpus 1 \
-  --account YOUR_ACCOUNT --partition YOUR_PARTITION
+  --time 24:00:00
 ```
 
-By default this only writes `.slurm` files and prints submission commands. It does not call `sbatch`. Optional flags include `--qos`, `--gpu-type`, and `--dependency JOB_ID[:JOB_ID]` (using `afterok`). There are no embedded accounts, email addresses, executable paths, or GPU models. Regenerate scripts after moving the batch, because scheduler script paths are absolute.
+By default this writes scripts requesting one H200 GPU, six CPU cores, the `embers` partition, and `gts-jcgumbart-coda20`; it runs the local CUDA NAMD 3 binary with `+setcpuaffinity +devices 0`. It only writes `.slurm` files and prints submission commands—it does not call `sbatch`. Override this setup with `--namd`, `--cpus`, `--gpus`, `--gpu-type`, `--gpu-devices`, `--account`, `--partition`, `--qos`, or `--dependency JOB_ID[:JOB_ID]` (using `afterok`).
 
 Submit a generated script yourself using its printed `sbatch` command. Alternatively, repeat the generation command with `--submit` to submit explicitly. Identical scripts can be reused; existing scripts with different settings are not overwritten. A scheduler dependency orders jobs; it does not create restart inputs or configure continuation. Completed jobs and existing output prefixes must not be resubmitted as fresh starts.
 

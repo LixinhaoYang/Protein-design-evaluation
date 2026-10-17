@@ -255,7 +255,7 @@ Thresholds are workflow heuristics, not universal acceptance criteria. Defaults 
 
 > Works on my machine; not guaranteed to work on other machines or clusters.
 
-The original MD scripts were used in the author's environment. The portable version is experimental: VMD/NAMD builds, force-field files, and scheduler settings require local configuration. Synthetic regression tests do not establish that a real system will build or run successfully on your installation.
+Stage 4 is configured for the original execution environment: CHARMM36m protein plus modified water/ion and NBFIX parameters, CUDA NAMD 3, and one H200 GPU on the `embers` partition. These defaults can be overridden, but the protocol remains experimental. Synthetic regression tests do not establish that a real system will build or run successfully.
 
 The [Stage 4 module](stage4_md_stability/README.md) provides three commands: `prepare.py` builds protein/water/ion systems with optional HMR, `configure.py` creates initial or restart NAMD segments, and `slurm.py` writes site-configurable job scripts. Slurm submission requires an explicit `--submit` flag. Run length is always supplied by the user.
 

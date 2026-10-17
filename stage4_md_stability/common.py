@@ -5,11 +5,34 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 from pathlib import Path
 
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
+
+# Defaults for the MD environment in which this workflow is run.  They retain
+# the exact CHARMM file combination and NAMD 3 CUDA executable used by the
+# predecessor workflow.  Set STAGE4_PARAMDIR or pass the command-line options
+# to use a different installation.
+PARAMETER_DIRECTORY = Path(os.environ.get(
+    "STAGE4_PARAMDIR", "/storage/home/hcoda1/9/lyang403/r-jcgumbart-0/ParamFiles",
+))
+DEFAULT_TOPOLOGY_FILES = (
+    PARAMETER_DIRECTORY / "top_all36_prot.rtf",
+    PARAMETER_DIRECTORY / "toppar_water_ions.str",
+)
+DEFAULT_PARAMETER_FILES = (
+    PARAMETER_DIRECTORY / "toppar_water_ions_modified.prm",
+    PARAMETER_DIRECTORY / "par_all36m_prot.prm",
+    PARAMETER_DIRECTORY / "NBFIX.str",
+)
+DEFAULT_NAMD = Path(os.environ.get(
+    "STAGE4_NAMD_BIN",
+    "/storage/project/r-jcgumbart-0/jcgumbart/software/"
+    "NAMD_3.0.2_Linux-x86_64-multicore-CUDA/namd3",
+))
 
 
 def identifier(value: str) -> str:

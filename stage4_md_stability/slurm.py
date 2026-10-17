@@ -16,9 +16,9 @@ import sys
 from pathlib import Path
 
 try:
-    from .common import identifier, nonnegative_int, positive_int, require_file
+    from .common import DEFAULT_NAMD, identifier, nonnegative_int, positive_int, require_file
 except ImportError:
-    from common import identifier, nonnegative_int, positive_int, require_file
+    from common import DEFAULT_NAMD, identifier, nonnegative_int, positive_int, require_file
 
 
 def generate(args) -> list[Path]:
@@ -30,6 +30,13 @@ def generate(args) -> list[Path]:
             raise ValueError(f"invalid --{name.replace('_', '-')} token")
     if args.gpu_type and not args.gpus:
         raise ValueError("--gpu-type requires --gpus greater than zero")
+    if args.gpu_devices and not args.gpus:
+        raise ValueError("--gpu-devices requires --gpus greater than zero")
+    gpu_devices = args.gpu_devices or ",".join(str(index) for index in range(args.gpus))
+    if args.gpus and (not re.fullmatch(r"\d+(?:,\d+)*", gpu_devices) or
+                      len(gpu_devices.split(",")) != args.gpus or
+                      len(set(gpu_devices.split(","))) != args.gpus):
+        raise ValueError("--gpu-devices must list each allocated NAMD GPU once, such as 0 or 0,1")
     if args.dependency and not re.fullmatch(r"\d+(?::\d+)*", args.dependency):
         raise ValueError("--dependency must contain job IDs separated by colons")
     if any(c in args.namd for c in "\n\r"):
@@ -56,8 +63,11 @@ def generate(args) -> list[Path]:
         if args.dependency:
             options.append(("dependency", "afterok:" + args.dependency))
         body = "#!/usr/bin/env bash\n" + "".join(f"#SBATCH --{key}={shlex.quote(value)}\n" for key, value in options)
-        body += ("set -euo pipefail\n" + f"exec {shlex.quote(args.namd)} +p{args.cpus} "
-                 + shlex.quote(str(config)) + "\n")
+        namd_command = [args.namd, f"+p{args.cpus}"]
+        if args.gpus:
+            namd_command.extend(("+setcpuaffinity", "+devices", gpu_devices))
+        namd_command.append(str(config))
+        body += "set -euo pipefail\nexec " + shlex.join(namd_command) + "\n"
         if script.exists() and script.read_text() != body:
             raise ValueError(f"existing Slurm script has different contents: {script}")
         plans.append((script, logs, body))
@@ -83,13 +93,14 @@ def generate(args) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("configs", nargs="+", type=Path)
-    parser.add_argument("--namd", required=True, help="compute-node executable path or command name; no extra arguments")
+    parser.add_argument("--namd", default=str(DEFAULT_NAMD), help="compute-node executable path or command name; default: local CUDA NAMD 3")
     parser.add_argument("--time", required=True, help="Slurm wall time in [days-]hours:minutes:seconds")
     parser.add_argument("--cpus", type=positive_int, default=6)
     parser.add_argument("--gpus", type=nonnegative_int, default=1)
-    parser.add_argument("--gpu-type", help="optional site GPU type")
-    parser.add_argument("--account")
-    parser.add_argument("--partition")
+    parser.add_argument("--gpu-type", default="H200", help="Slurm GPU type; default: H200")
+    parser.add_argument("--gpu-devices", help="NAMD-visible GPU IDs, e.g. 0 or 0,1; default: 0 through gpus-1")
+    parser.add_argument("--account", default="gts-jcgumbart-coda20")
+    parser.add_argument("--partition", default="embers")
     parser.add_argument("--qos")
     parser.add_argument("--dependency", help="afterok job IDs separated by colons; does not configure restart")
     parser.add_argument("--submit", action="store_true", help="actually call sbatch; default only writes scripts")
