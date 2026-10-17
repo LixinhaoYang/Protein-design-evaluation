@@ -1,0 +1,45 @@
+# Python and editor state
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.env
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local inputs, generated structures, and calculation outputs
+data/
+input/
+inputs/
+output/
+outputs/
+results/
+runs/
+scratch/
+*.fasta
+*.fa
+*.faa
+*.fna
+*.pdb
+*.cif
+*.mmcif
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.sc
+*.log
+*.out
+*.err
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.zst
+
+# Job scheduler artifacts
+slurm-*.out
+slurm-*.err
