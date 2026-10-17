@@ -3,6 +3,8 @@
 
 This joins `restrained_relax.py` output and `rosetta_official_metrics.py`
 output into the Stage 2 subset used by the cross-step triage table.
+Unmatched rows or unavailable required metrics produce INCOMPLETE, with details
+in triage_notes. Existing relaxation failures retain FAIL status.
 
 Usage
     python stage2_fast_physics/triage_features.py --relax-csv relax.csv --rosetta-csv rosetta_official_metrics.csv --csv stage2_triage.csv
@@ -13,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 from pathlib import Path
 from typing import TextIO
@@ -33,7 +36,27 @@ CSV_COLUMNS = [
     "PackStat",
     "n_flags",
     "triage_status",
+    "triage_notes",
 ]
+
+
+RELAX_METRICS = (
+    "length",
+    "pre_relax_clashscore",
+    "post_relax_clashscore",
+    "relax_CA_RMSD",
+    "max_CA_displacement",
+    "total_flags",
+    "warn_pre_relax_clash",
+)
+
+ROSETTA_METRICS = (
+    "rosetta_score_per_residue",
+    "fa_rep_weighted",
+    "rosetta_buried_unsat_hbonds",
+    "rosetta_sap_score",
+    "rosetta_packstat",
+)
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -85,16 +108,33 @@ def rosetta_rows_by_relaxed_pdb(rows: list[dict]) -> dict[str, dict]:
     for row in rows:
         source = normalize_source(row.get("source", ""))
         if source:
+            if source in by_source:
+                raise ValueError(f"duplicate Rosetta source {source!r}")
             by_source[source] = row
     return by_source
 
 
 def rosetta_rows_by_structure_id(rows: list[dict]) -> dict[str, dict]:
-    return {
-        strip_restrained_relax_suffix(row.get("structure_id", "")): row
-        for row in rows
-        if row.get("structure_id")
-    }
+    by_id = {}
+    for row in rows:
+        structure_id = strip_restrained_relax_suffix(row.get("structure_id", ""))
+        if structure_id:
+            if structure_id in by_id:
+                raise ValueError(f"duplicate Rosetta structure_id {structure_id!r}")
+            by_id[structure_id] = row
+    return by_id
+
+
+def missing_numeric_metrics(row: dict, names: tuple[str, ...]) -> list[str]:
+    missing = []
+    for name in names:
+        try:
+            available = math.isfinite(float(row.get(name, "")))
+        except (TypeError, ValueError):
+            available = False
+        if not available:
+            missing.append(name)
+    return missing
 
 
 def int_value(value: str | int | None) -> int:
@@ -103,9 +143,13 @@ def int_value(value: str | int | None) -> int:
     return int(float(value))
 
 
-def status_from_flags(*, n_fail_flags: int, warn_pre_relax_clash: int) -> str:
+def status_from_flags(
+    *, n_fail_flags: int, warn_pre_relax_clash: int, incomplete: bool = False,
+) -> str:
     if n_fail_flags:
         return "FAIL"
+    if incomplete:
+        return "INCOMPLETE"
     if warn_pre_relax_clash:
         return "WARN"
     return "PASS"
@@ -124,11 +168,29 @@ def summarize(
 
     for relax in relax_rows:
         structure_id = relax.get("structure_id", "")
+        if not structure_id or not structure_id.strip():
+            raise ValueError("relaxation row has an empty structure_id")
         sequence_id = id_map.get(structure_id, structure_id)
         relaxed_pdb = normalize_source(relax.get("relaxed_pdb", ""))
         rosetta = rosetta_by_source.get(relaxed_pdb) or rosetta_by_id.get(structure_id, {})
-        n_fail_flags = int_value(relax.get("total_flags"))
-        warn_pre = int_value(relax.get("warn_pre_relax_clash"))
+        notes: list[str] = []
+        missing_relax = missing_numeric_metrics(relax, RELAX_METRICS)
+        if missing_relax:
+            notes.append(f"missing or invalid relaxation metrics: {', '.join(missing_relax)}")
+        if not rosetta:
+            notes.append("missing Rosetta row")
+        else:
+            missing_rosetta = missing_numeric_metrics(rosetta, ROSETTA_METRICS)
+            if missing_rosetta:
+                notes.append(f"missing or invalid Rosetta metrics: {', '.join(missing_rosetta)}")
+        n_fail_flags = (
+            int_value(relax.get("total_flags"))
+            if "total_flags" not in missing_relax else 0
+        )
+        warn_pre = (
+            int_value(relax.get("warn_pre_relax_clash"))
+            if "warn_pre_relax_clash" not in missing_relax else 0
+        )
         n_flags = n_fail_flags + warn_pre
         rows.append({
             "sequence_id": sequence_id,
@@ -147,7 +209,9 @@ def summarize(
             "triage_status": status_from_flags(
                 n_fail_flags=n_fail_flags,
                 warn_pre_relax_clash=warn_pre,
+                incomplete=bool(notes),
             ),
+            "triage_notes": "; ".join(notes),
         })
     return rows
 
