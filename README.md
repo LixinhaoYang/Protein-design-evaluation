@@ -4,7 +4,7 @@ This workflow was developed for an avian influenza (bird flu) research project f
 
 The workflow evaluates designed protein sequences and structures in three stages: sequence screening, physical screening of candidate structures, and fold/motif recovery after external AlphaFold 3 (AF3) prediction. It helps prioritize candidates before spending compute on refolding and makes the resulting quality signals available in one CSV table.
 
-An optional molecular dynamics (MD) simulation step is planned to assess the stability of selected designs after structure recovery. This part of the workflow is still under development.
+An optional, experimental Stage 4 now provides molecular dynamics (MD) system preparation and NAMD/Slurm run configuration. Trajectory analysis and stability-based selection remain under development.
 
 The repository provides command-line scripts for each stage. You run the stages, review their outputs, and select candidates; AF3 input preparation, prediction, and job scheduling are external to this repository. The metrics support quality control and ranking, but do not establish function, binding, catalysis, or specificity.
 
@@ -18,7 +18,9 @@ flowchart TD
     D --> E[External AF3 prediction for selected candidates]
     E --> F[Stage 3: fold and motif recovery]
     F --> G[Final table and metric review]
-    G -.-> H[Planned: optional MD stability assessment]
+    G --> H[Experimental Stage 4: MD preparation and run setup]
+    H --> I[External NAMD simulation]
+    I -.-> J[Planned: trajectory analysis and stability assessment]
 ```
 
 | Component | Input | Output |
@@ -26,6 +28,7 @@ flowchart TD
 | [Stage 1](stage1_sequence_screening/) | Candidate sequences in FASTA | Sequence validity and liability features |
 | [Stage 2](stage2_fast_physics/) | Candidate structures in PDB format | Relaxation, clash, energy, and Rosetta structure metrics |
 | [Stage 3](stage3_fold_recovery/) | Design PDB, AF3 mmCIF, confidence JSON, and motif positions | Confidence and structural recovery metrics |
+| [Stage 4 — experimental](stage4_md_stability/) | Selected single-chain PDBs and external force-field files | Solvated systems, NAMD segment configurations, and Slurm scripts |
 | [Aggregation](triage_table.py) | Stage feature CSVs | One row per `sequence_id`, with combined status and notes |
 
 Stage 2 scores the candidate structures available before AF3. The commands do not automatically filter candidates between stages: use the Stage 1 table to choose which structures to score, then review the pre-AF3 table before submitting predictions.
@@ -58,6 +61,8 @@ python -m pip install -r requirements.txt
 The full Stage 2 workflow requires a separately installed PyRosetta environment. PyRosetta is not installed by `requirements.txt` or `environment.yml`. The commands below use `conda run -n pyrosetta`; replace `pyrosetta` with your configured environment, or run `python` directly after activating it.
 
 AF3 also runs in your own environment. Stage 3 consumes its structure and confidence outputs.
+
+Stage 4 additionally requires VMD with PSFGEN, Solvate, and Autoionize plugins. NAMD and Slurm are needed on the simulation host. These tools and force-field files are not installed or bundled here; see the [Stage 4 instructions](stage4_md_stability/README.md).
 
 ## Run the workflow
 
@@ -246,11 +251,15 @@ Combined status precedence is **FAIL → INCOMPLETE → WARN → PASS**. A known
 
 Thresholds are workflow heuristics, not universal acceptance criteria. Defaults assume soluble designs for hydrophobic-stretch warnings; task-specific expectations need review.
 
-### Planned MD stability assessment
+### Experimental Stage 4: MD preparation and run setup
 
-Selected candidates may undergo MD simulations after fold and motif recovery to examine structural stability and conformational changes under the chosen simulation conditions. The simulation protocol, trajectory analysis, and integration with candidate selection are still being developed.
+> Works on my machine; not guaranteed to work on other machines or clusters.
 
-The current scripts and triage tables cover Stages 1–3 only. They do not include MD results, and a current `PASS` label does not indicate that a design has been validated by MD. No MD run commands or acceptance thresholds are specified yet.
+The original MD scripts were used in the author's environment. The portable version is experimental: VMD/NAMD builds, force-field files, and scheduler settings require local configuration. Synthetic regression tests do not establish that a real system will build or run successfully on your installation.
+
+The [Stage 4 module](stage4_md_stability/README.md) provides three commands: `prepare.py` builds protein/water/ion systems with optional HMR, `configure.py` creates initial or restart NAMD segments, and `slurm.py` writes site-configurable job scripts. Slurm submission requires an explicit `--submit` flag. Run length is always supplied by the user.
+
+Trajectory analysis, calibrated simulation protocols, and MD acceptance thresholds are still under development. `triage_table.py` continues to aggregate Stages 1–3 only; a current `PASS` does not indicate MD validation.
 
 ## Additional Stage 2 tools
 
@@ -270,7 +279,7 @@ The geometry proxies differ from Rosetta SAP, PackStat, and BuriedUnsatHbondFilt
 
 ## Validation and local data
 
-Run the aggregation regression tests without PyRosetta or AF3:
+Run the regression tests without PyRosetta, VMD, NAMD, AF3, or a scheduler (Tcl helper tests use `tclsh` when available):
 
 ```bash
 python -m unittest discover -s tests -v

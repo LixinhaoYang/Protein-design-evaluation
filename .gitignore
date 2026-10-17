@@ -26,6 +26,17 @@ scratch/
 *.pdb
 *.cif
 *.mmcif
+*.psf
+*.dcd
+*.coor
+*.vel
+*.xsc
+*.xst
+*.conf
+*.slurm
+*.rtf
+*.prm
+*.str
 *.csv
 *.tsv
 *.json
@@ -43,3 +54,6 @@ scratch/
 # Job scheduler artifacts
 slurm-*.out
 slurm-*.err
+
+# Editor undo files
+*.un~
