@@ -15,10 +15,10 @@ underlying modules keep their detailed reports; this wrapper keeps only the
 small set of metrics and conservative flags needed for a first-pass table.
 
 Usage
-    conda run -n base python stage1_sequence_screening/run.py designs.fasta
-    conda run -n base python stage1_sequence_screening/run.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/run.py designs.fasta --csv sanity.csv
-    conda run -n base python stage1_sequence_screening/run.py designs.fasta --summary
+    python stage1_sequence_screening/run.py designs.fasta
+    python stage1_sequence_screening/run.py --seq MKVLAA...
+    python stage1_sequence_screening/run.py designs.fasta --csv sanity.csv
+    python stage1_sequence_screening/run.py designs.fasta --summary
 """
 
 from __future__ import annotations

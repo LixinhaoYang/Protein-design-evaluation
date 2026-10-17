@@ -24,11 +24,11 @@ Task metadata matters:
     is still measured and written to CSV/JSON.
 
 Usage
-    conda run -n base python stage1_sequence_screening/cys_pattern.py designs.fasta
-    conda run -n base python stage1_sequence_screening/cys_pattern.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/cys_pattern.py designs.fasta --disulfide-expected
-    conda run -n base python stage1_sequence_screening/cys_pattern.py designs.fasta --cys-expected
-    conda run -n base python stage1_sequence_screening/cys_pattern.py designs.fasta --csv cys.csv --json cys.json
+    python stage1_sequence_screening/cys_pattern.py designs.fasta
+    python stage1_sequence_screening/cys_pattern.py --seq MKVLAA...
+    python stage1_sequence_screening/cys_pattern.py designs.fasta --disulfide-expected
+    python stage1_sequence_screening/cys_pattern.py designs.fasta --cys-expected
+    python stage1_sequence_screening/cys_pattern.py designs.fasta --csv cys.csv --json cys.json
 """
 
 from __future__ import annotations

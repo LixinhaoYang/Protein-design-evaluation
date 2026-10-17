@@ -16,10 +16,10 @@ Reports
   * each value against a natural-protein reference band
 
 Usage
-    conda run -n base python stage1_sequence_screening/aa_composition.py designs.fasta
-    conda run -n base python stage1_sequence_screening/aa_composition.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/aa_composition.py designs.fasta --csv comp.csv --json comp.json
-    conda run -n base python stage1_sequence_screening/aa_composition.py designs.fasta --all-residues
+    python stage1_sequence_screening/aa_composition.py designs.fasta
+    python stage1_sequence_screening/aa_composition.py --seq MKVLAA...
+    python stage1_sequence_screening/aa_composition.py designs.fasta --csv comp.csv --json comp.json
+    python stage1_sequence_screening/aa_composition.py designs.fasta --all-residues
 """
 
 from __future__ import annotations

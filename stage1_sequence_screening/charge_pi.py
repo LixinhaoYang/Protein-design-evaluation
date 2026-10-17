@@ -25,10 +25,10 @@ Advisory only, like the other Step 1 liability subchecks: every flag is a WARN,
 nothing fails.
 
 Usage
-    conda run -n base python stage1_sequence_screening/charge_pi.py designs.fasta
-    conda run -n base python stage1_sequence_screening/charge_pi.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/charge_pi.py designs.fasta --csv q.csv --json q.json
-    conda run -n base python stage1_sequence_screening/charge_pi.py designs.fasta --require-biopython    # fail if absent
+    python stage1_sequence_screening/charge_pi.py designs.fasta
+    python stage1_sequence_screening/charge_pi.py --seq MKVLAA...
+    python stage1_sequence_screening/charge_pi.py designs.fasta --csv q.csv --json q.json
+    python stage1_sequence_screening/charge_pi.py designs.fasta --require-biopython    # fail if absent
 """
 
 from __future__ import annotations

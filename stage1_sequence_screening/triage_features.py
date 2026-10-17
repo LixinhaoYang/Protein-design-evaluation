@@ -7,8 +7,8 @@ This emits the sequence-sanity subset used by the cross-step triage table:
 `min_KD19`, `q_norm`, `n_flags`, `triage_status`.
 
 Usage
-    conda run -n petase-zeroshot python stage1_sequence_screening/triage_features.py designs.fasta --csv step1_triage.csv
-    conda run -n petase-zeroshot python stage1_sequence_screening/triage_features.py --seq MKVLAA...
+    python stage1_sequence_screening/triage_features.py designs.fasta --csv step1_triage.csv
+    python stage1_sequence_screening/triage_features.py --seq MKVLAA...
 """
 
 from __future__ import annotations

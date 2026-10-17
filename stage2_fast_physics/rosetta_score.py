@@ -14,9 +14,9 @@ treated as a continuous feature by default. Add `--max-score-per-residue` only
 after calibrating a cutoff on a larger scored set.
 
 Usage
-    conda run -n base python stage2_fast_physics/rosetta_score.py scores.sc --length 120
-    conda run -n base python stage2_fast_physics/rosetta_score.py scored_model.pdb
-    conda run -n base python stage2_fast_physics/rosetta_score.py scores.sc --lengths-csv lengths.csv
+    python stage2_fast_physics/rosetta_score.py scores.sc --length 120
+    python stage2_fast_physics/rosetta_score.py scored_model.pdb
+    python stage2_fast_physics/rosetta_score.py scores.sc --lengths-csv lengths.csv
 """
 
 from __future__ import annotations

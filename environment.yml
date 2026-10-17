@@ -1,0 +1,7 @@
+name: protein-design-evaluation
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy>=1.23
+  - biopython>=1.80

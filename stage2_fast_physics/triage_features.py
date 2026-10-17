@@ -5,8 +5,8 @@ This joins `restrained_relax.py` output and `rosetta_official_metrics.py`
 output into the Stage 2 subset used by the cross-step triage table.
 
 Usage
-    conda run -n petase-zeroshot python stage2_fast_physics/triage_features.py --relax-csv relax.csv --rosetta-csv rosetta_official_metrics.csv --csv stage2_triage.csv
-    conda run -n petase-zeroshot python stage2_fast_physics/triage_features.py --relax-csv relax.csv --rosetta-csv rosetta_official_metrics.csv --id-map-csv candidate_metrics.csv
+    python stage2_fast_physics/triage_features.py --relax-csv relax.csv --rosetta-csv rosetta_official_metrics.csv --csv stage2_triage.csv
+    python stage2_fast_physics/triage_features.py --relax-csv relax.csv --rosetta-csv rosetta_official_metrics.csv --id-map-csv candidate_metrics.csv
 """
 
 from __future__ import annotations

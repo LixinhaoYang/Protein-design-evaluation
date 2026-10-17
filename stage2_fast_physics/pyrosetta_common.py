@@ -91,8 +91,8 @@ def require_pyrosetta():
         import pyrosetta
     except ImportError as exc:  # pragma: no cover - depends on local env
         raise RuntimeError(
-            "PyRosetta is not importable. Use `conda run -n pyrosetta python ...` "
-            "or activate the pyrosetta environment."
+            "PyRosetta is not importable. Run this command in an environment "
+            "that provides a licensed, configured PyRosetta installation."
         ) from exc
     return pyrosetta
 

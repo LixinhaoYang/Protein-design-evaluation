@@ -25,10 +25,10 @@ to contain a membrane anchor or signal peptide; the stretch is then measured and
 reported but not treated as a liability.
 
 Usage
-    conda run -n base python stage1_sequence_screening/hydrophobicity.py designs.fasta
-    conda run -n base python stage1_sequence_screening/hydrophobicity.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/hydrophobicity.py designs.fasta --window 19 --max-hydropathy 1.6
-    conda run -n base python stage1_sequence_screening/hydrophobicity.py designs.fasta --csv h.csv --json h.json
+    python stage1_sequence_screening/hydrophobicity.py designs.fasta
+    python stage1_sequence_screening/hydrophobicity.py --seq MKVLAA...
+    python stage1_sequence_screening/hydrophobicity.py designs.fasta --window 19 --max-hydropathy 1.6
+    python stage1_sequence_screening/hydrophobicity.py designs.fasta --csv h.csv --json h.json
 """
 
 from __future__ import annotations

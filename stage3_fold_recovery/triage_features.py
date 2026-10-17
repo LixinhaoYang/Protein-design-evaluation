@@ -5,7 +5,7 @@ This converts `structure_recovery.py` output into the Stage 3 subset used by the
 cross-step triage table.
 
 Usage
-    conda run -n petase-zeroshot python stage3_fold_recovery/triage_features.py --metrics-csv structure_recovery_metrics.csv --csv stage3_triage.csv
+    python stage3_fold_recovery/triage_features.py --metrics-csv structure_recovery_metrics.csv --csv stage3_triage.csv
 """
 
 from __future__ import annotations

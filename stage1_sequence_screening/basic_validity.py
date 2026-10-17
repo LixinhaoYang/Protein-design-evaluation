@@ -18,11 +18,11 @@ Checks
   5. length bounds     absurdly short or long
 
 Usage
-    conda run -n base python stage1_sequence_screening/basic_validity.py designs.fasta
-    conda run -n base python stage1_sequence_screening/basic_validity.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/basic_validity.py a.fasta b.fasta --csv out.csv --json out.json
-    conda run -n base python stage1_sequence_screening/basic_validity.py designs.fasta --expected-length 210
-    conda run -n base python stage1_sequence_screening/basic_validity.py designs.fasta --context 30
+    python stage1_sequence_screening/basic_validity.py designs.fasta
+    python stage1_sequence_screening/basic_validity.py --seq MKVLAA...
+    python stage1_sequence_screening/basic_validity.py a.fasta b.fasta --csv out.csv --json out.json
+    python stage1_sequence_screening/basic_validity.py designs.fasta --expected-length 210
+    python stage1_sequence_screening/basic_validity.py designs.fasta --context 30
 """
 
 from __future__ import annotations

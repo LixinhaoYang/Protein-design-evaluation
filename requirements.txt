@@ -1,2 +1,4 @@
+# Core Python dependencies for Stage 1, Stage 3, and result aggregation.
+# PyRosetta and AlphaFold 3 are external, site-managed environments; see README.md.
 numpy>=1.23
 biopython>=1.80

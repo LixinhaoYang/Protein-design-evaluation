@@ -19,9 +19,16 @@ AF3 is deliberately **after** the fast physical screen. Do not submit a candidat
 
 The reported signals support ranking and quality control. They do not, on their own, establish or rule out function, binding, catalysis, or specificity.
 
-## Environment
+## Environments and dependencies
 
-Python 3.10 or later is required:
+Python 3.10 or later is required. The core environment runs Stage 1, Stage 3, `triage_table.py`, and the geometry-only Stage 2 helpers:
+
+```bash
+conda env create -f environment.yml
+conda activate protein-design-evaluation
+```
+
+Alternatively, create a virtual environment and install the same core dependencies:
 
 ```bash
 python -m venv .venv
@@ -29,7 +36,15 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-The Stage 2 PyRosetta scripts must run in an environment with PyRosetta installed separately; PyRosetta is not installed through `pip` here.
+`numpy` is required for Stage 3 structural alignment. `biopython` provides the full Stage 1 pI and charge calculations; without it, Stage 1 falls back to simpler charge metrics.
+
+The full Stage 2 path requires **PyRosetta** for coordinate-restrained relaxation and official Rosetta metrics. PyRosetta is intentionally not listed in `requirements.txt`: install it separately in an environment that is licensed and configured for your site, then run the PyRosetta commands in that environment. For example:
+
+```bash
+conda run -n pyrosetta python stage2_fast_physics/restrained_relax.py --help
+```
+
+AF3 execution is also external to this repository. It requires your site's AF3 software or container, model weights, databases, GPU allocation, and scheduler configuration. This repository only consumes the resulting mmCIF and confidence JSON files in Stage 3.
 
 ## Usage
 
@@ -47,13 +62,13 @@ python stage1_sequence_screening/triage_features.py /path/to/sequences.fasta \
 
 ### Stage 2: fast physical screening
 
-Stage 2 operates on the candidate PDB structures produced by the design method, not on AF3 structures. With PyRosetta available, relax first and score the relaxed structures:
+Stage 2 operates on the candidate PDB structures produced by the design method, not on AF3 structures. With PyRosetta available, relax first and score the relaxed structures. Replace `pyrosetta` below with the name of your site-managed PyRosetta environment:
 
 ```bash
-python stage2_fast_physics/restrained_relax.py /path/to/candidate_models/*.pdb \
+conda run -n pyrosetta python stage2_fast_physics/restrained_relax.py /path/to/candidate_models/*.pdb \
   --outdir results/relaxed_structures --csv results/stage2_relax.csv
 
-python stage2_fast_physics/rosetta_official_metrics.py results/relaxed_structures/*.pdb \
+conda run -n pyrosetta python stage2_fast_physics/rosetta_official_metrics.py results/relaxed_structures/*.pdb \
   --csv results/stage2_rosetta.csv
 
 python stage2_fast_physics/triage_features.py \

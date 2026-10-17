@@ -30,10 +30,10 @@ Measures
   * fewest distinct residues in any 15-aa window
 
 Usage
-    conda run -n base python stage1_sequence_screening/low_complexity.py designs.fasta
-    conda run -n base python stage1_sequence_screening/low_complexity.py --seq MKVLAA...
-    conda run -n base python stage1_sequence_screening/low_complexity.py designs.fasta --csv lc.csv --json lc.json
-    conda run -n base python stage1_sequence_screening/low_complexity.py designs.fasta --window 20 --min-entropy 2.0
+    python stage1_sequence_screening/low_complexity.py designs.fasta
+    python stage1_sequence_screening/low_complexity.py --seq MKVLAA...
+    python stage1_sequence_screening/low_complexity.py designs.fasta --csv lc.csv --json lc.json
+    python stage1_sequence_screening/low_complexity.py designs.fasta --window 20 --min-entropy 2.0
 """
 
 from __future__ import annotations
