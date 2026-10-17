@@ -1,6 +1,8 @@
 # Protein Design Triage
 
-Evaluate designed protein sequences and structures in three stages: sequence screening, physical screening of candidate structures, and fold/motif recovery after external AlphaFold 3 (AF3) prediction. The workflow helps prioritize candidates before spending compute on refolding and makes the resulting quality signals available in one CSV table.
+This workflow was developed for an avian influenza (bird flu) research project focused on epitope design and evaluation. This public repository contains the reusable evaluation workflow, with project-specific examples, research data, and sensitive information removed.
+
+The workflow evaluates designed protein sequences and structures in three stages: sequence screening, physical screening of candidate structures, and fold/motif recovery after external AlphaFold 3 (AF3) prediction. It helps prioritize candidates before spending compute on refolding and makes the resulting quality signals available in one CSV table.
 
 An optional molecular dynamics (MD) simulation step is planned to assess the stability of selected designs after structure recovery. This part of the workflow is still under development.
 
