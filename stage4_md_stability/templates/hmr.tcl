@@ -38,7 +38,11 @@ proc md_repartition_hydrogens {molid target_mass} {
         $hydrogen delete
         $heavy delete
     }
-    if {abs([md_total_mass $all] - $before) > 0.0001} {
+    # VMD stores masses as single-precision floats, so summing a solvated box
+    # accumulates rounding well above a fixed 0.0001 amu. Scale the tolerance
+    # with system mass and keep the strict absolute floor for small systems.
+    set tolerance [expr {max(0.0001, 1.0e-7 * $before)}]
+    if {abs([md_total_mass $all] - $before) > $tolerance} {
         error "HMR did not conserve total system mass"
     }
     $hydrogens delete

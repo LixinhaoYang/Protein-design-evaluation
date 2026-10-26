@@ -14,11 +14,24 @@ This stage prepares selected designs for optional MD simulations after fold/moti
 - The local default NAMD executable is `/storage/project/r-jcgumbart-0/jcgumbart/software/NAMD_3.0.2_Linux-x86_64-multicore-CUDA/namd3`. It is a single-node CUDA build. The Slurm launcher runs one process with `+p` CPU threads, `+setcpuaffinity`, and explicit NAMD GPU devices; MPI/multi-node launchers are outside this template's scope.
 - Slurm only if using the provided job-script generator.
 
-The preparer accepts one selected chain of standard amino acids in **PDB** format. Convert AF3 mmCIF files to PDB first and verify chain IDs and residue numbering. Select whether the starting structure is from the design method or AF3 using `--source design|af3`; it is never inferred from the filename.
+The preparer accepts one selected chain of standard amino acids in **PDB** format. Convert AF3 mmCIF files to PDB first with `cif_to_pdb.py` (§0) and verify chain IDs and residue numbering. Select whether the starting structure is from the design method or AF3 using `--source design|af3`; it is never inferred from the filename.
 
 Other chains and water are excluded. Selected-chain ligands, modified residues, alternate residue identities, and multiple models are rejected. Disulfide patching, glycans, membranes, cofactors, and task-specific protonation are not supported. Inputs containing `SSBOND` records are rejected; cysteines without those records are treated as unpatched cysteines. Supply only systems for which that chemistry is appropriate.
 
 The selected chain is rewritten as chain A with consecutive residue numbers and built as PSF segment `PRO`. `residue_map.csv` records the original chain, residue number, and insertion code for future motif mapping. Multiple fragments separated by `TER` in the selected chain are rejected. PSFGEN uses the original workflow's NTER/CTER patches and maps HIS to HSE; no pH-based protonation assignment is performed. Input hydrogens are removed before PSFGEN rebuilds them.
+
+## 0. Convert AF3 mmCIF to PDB
+
+AF3 writes mmCIF, and the preparer reads PDB. `cif_to_pdb.py` performs that one conversion:
+
+```bash
+python stage4_md_stability/cif_to_pdb.py af3_output/*/*_model.cif \
+  --chain A --outdir inputs/af3_pdbs
+```
+
+Each file is written as `<sequence_id>.pdb`, taking the ID from the mmCIF stem with a trailing `_model` removed; use `--sequence-id` to name a single output. Existing files are never overwritten.
+
+Only the requested `auth_asym_id` is kept. Hydrogens are dropped because PSFGEN rebuilds them, and `OXT` is dropped because the CTER patch builds `OT1`/`OT2` itself. A HETATM record in the selected chain, a second model, an alternate conformer, a non-standard residue, or a missing `_atom_site` column is rejected rather than silently dropped, so an unexpected input fails here instead of inside PSFGEN. This tool converts; it does not select, score, or repair structures.
 
 ## 1. Prepare a system
 
@@ -32,7 +45,7 @@ python stage4_md_stability/prepare.py inputs/af3_pdbs/candidate_001.pdb \
 
 This runs VMD preparation, not MD or job submission. The output directory must be new or empty; a failed preparation leaves its logs for inspection and must be retried in a fresh directory. It never reuses existing structures as evidence of a successful build.
 
-Defaults are 25 Å water padding on every bounding-box face and 0.15 mol/L salt via Autoionize with potassium/chloride ions. Change these with `--padding` and `--salt-molar`. HMR is opt-in: add `--hmr` to repartition solute hydrogen masses to 3.024 Da, leaving water masses unchanged. The Tcl code verifies each hydrogen has one heavy-atom partner and checks total mass conservation.
+Defaults are 25 Å water padding on every bounding-box face and 0.15 mol/L salt via Autoionize with potassium/chloride ions. Change these with `--padding` and `--salt-molar`. HMR is opt-in: add `--hmr` to repartition solute hydrogen masses to 3.024 Da, leaving water masses unchanged. The Tcl code verifies each hydrogen has one heavy-atom partner and checks total mass conservation. VMD stores masses as single-precision floats, so summing a solvated box accumulates rounding error that grows with system size; the conservation tolerance therefore scales as `max(0.0001, 1e-7 * total_mass)` rather than being a fixed absolute value. For a ~400,000 amu box that is ~0.04 amu, still far below a single hydrogen mass.
 
 For batches, use multiple PDB paths with `--source`, or a case CSV:
 
