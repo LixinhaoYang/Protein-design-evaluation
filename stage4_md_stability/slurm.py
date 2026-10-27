@@ -49,8 +49,9 @@ def generate(args) -> list[Path]:
         script = config.with_suffix(".slurm")
         logs = config.parent.parent / "logs"
         job_name = f"{identifier(config.parent.parent.name)}.{config.stem}"[:80]
-        options = [("job-name", job_name), ("nodes", "1"), ("ntasks", "1"),
-                   ("cpus-per-task", str(args.cpus)), ("time", args.time),
+        # Same request shape as slurmsub.sh from the previous version of this workflow: one node, one task slot per NAMD thread.
+        options = [("job-name", job_name), ("nodes", "1"),
+                   ("ntasks-per-node", str(args.cpus)), ("time", args.time),
                    ("chdir", str(config.parent)),
                    ("output", str(logs / f"{config.stem}.%j.out")),
                    ("error", str(logs / f"{config.stem}.%j.err"))]

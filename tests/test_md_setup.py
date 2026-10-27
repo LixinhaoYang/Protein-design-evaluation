@@ -333,8 +333,8 @@ class SlurmTests(QuietTest):
             self.assertIn("Preview only", out)
             script = config.with_suffix(".slurm")
             text = script.read_text()
-            self.assertIn("--cpus-per-task=8", text)
-            self.assertIn("--ntasks=1", text)
+            self.assertIn("--nodes=1", text)
+            self.assertIn("--ntasks-per-node=8", text)
             self.assertIn("--gres=gpu:TEST:2", text)
             self.assertIn("--dependency=afterok:123:456", text)
             self.assertIn("+p8", text)
@@ -416,27 +416,53 @@ if __name__ == "__main__":
 
 
 class NamdTemplateTests(unittest.TestCase):
-    """Guard the NPT template settings that a real run depends on."""
+    """Pin the template to the proven base.conf from the previous version of this workflow.
+
+    That configuration has run to completion on the target cluster; configurations that
+    drifted from it crashed. A change here should be a deliberate decision, not a cleanup.
+    """
+
+    # Keyword -> value as written in base.conf (Tcl variables where the template takes
+    # the value from configure.py; their defaults match base.conf).
+    PROVEN = {
+        "wrapAll": "on", "wrapNearest": "on", "exclude": "scaled1-4", "1-4scaling": "1.0",
+        "cutoff": "12.0", "switching": "on", "switchdist": "10.0", "pairlistdist": "14.0",
+        "vdwForceSwitching": "on", "rigidBonds": "all", "nonbondedFreq": "1",
+        "fullElectFrequency": "2", "stepspercycle": "10", "PME": "yes", "PMEGridSpacing": "1.0",
+        "langevin": "on", "langevinDamping": "1.0", "useGroupPressure": "no",
+        "useFlexibleCell": "no", "useConstantArea": "no", "langevinPiston": "on",
+        "langevinPistonPeriod": "100.0", "langevinPistonDecay": "50.0",
+    }
 
     def setUp(self):
-        self.template = (TEMPLATES / "namd.tcl").read_text()
+        self.settings = {}
+        for line in (TEMPLATES / "namd.tcl").read_text().splitlines():
+            fields = line.split()
+            if len(fields) == 2 and not line.startswith((" ", "#")):
+                self.settings[fields[0]] = fields[1]
 
-    def test_output_wrapping_is_disabled(self):
-        # NAMD 3.0.2 segfaults wrapping a solvated box at realistic dcdfreq values.
-        self.assertIn("wrapAll off", self.template)
-        self.assertIn("wrapNearest off", self.template)
-        self.assertNotIn("wrapAll on", self.template)
+    def test_settings_match_the_proven_configuration(self):
+        for keyword, value in self.PROVEN.items():
+            self.assertEqual(self.settings.get(keyword), value, keyword)
 
-    def test_group_pressure_is_enabled_for_rigid_bonds(self):
-        self.assertIn("rigidBonds all", self.template)
-        self.assertIn("useGroupPressure yes", self.template)
-
-    def test_deprecated_parameter_names_are_not_used(self):
-        self.assertNotIn("1-4scaling", self.template)
-        self.assertIn("oneFourScaling", self.template)
+    def test_no_settings_beyond_the_proven_configuration(self):
+        # base.conf leaves these to NAMD's defaults; the template must not add them.
+        for keyword in ("useSettle", "binaryoutput", "binaryrestart", "oneFourScaling", "margin"):
+            self.assertNotIn(keyword, self.settings, keyword)
 
     def test_gpu_resident_is_opt_in(self):
-        self.assertIn("if {$gpu_resident}", self.template)
+        self.assertIn("if {$gpu_resident}", (TEMPLATES / "namd.tcl").read_text())
+
+    def test_configure_defaults_match_the_proven_configuration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest, case = fixture(Path(tmp), hmr=True)
+            self.assertEqual(configure.main(["--manifest", str(manifest), "--segment", "seg",
+                                             "--run-steps", "1000"]), 0)
+            text = (case / "conf/seg.conf").read_text()
+        for line in ("set timestep_fs 4.0", "set minimize_steps 200", "set output_every 25000",
+                     "set energy_every 5000", "set temperature_k 300.0",
+                     "set pressure_bar 1.01325", "set gpu_resident 0"):
+            self.assertIn(line, text)
 
 
 class GpuResidentConfigureTests(unittest.TestCase):

@@ -4,6 +4,8 @@
 
 The original workflow was used in the author's environment. This version retains its CHARMM36m parameter combination and NAMD 3 CUDA/Slurm defaults, while exposing command-line overrides. It has synthetic regression tests, but has not been validated end to end on real systems.
 
+> **Update (2026-10-27):** early end-to-end testing has now been done, and the pipeline runs under Slurm with NAMD 3.0.2 CUDA. Twenty-one ~67,000-atom designed-protein systems were built with `prepare.py`, configured with `configure.py`, and run as NPT MD on A100 and V100 GPUs: minimization, stable 300 K dynamics, and trajectory/restart output all behave. One fix came out of that testing and is in the current code: the HMR mass-conservation tolerance now scales with system size. A reproducible segfault at the first trajectory frame remains under investigation and is not yet explained. Long production runs and the analysis layer are still unproven, so treat the numbers as untested and read your startup logs.
+
 This stage prepares selected designs for optional MD simulations after fold/motif recovery. It provides system building, NAMD configuration, and Slurm script generation. Trajectory analysis and integration of MD metrics into the triage table are not implemented yet. A prepared system or a completed simulation is not assigned a stability `PASS`.
 
 ## Requirements and scope
@@ -86,19 +88,20 @@ Generate configurations on the simulation host. By default this uses the local w
 ```bash
 python stage4_md_stability/configure.py \
   --manifest results/md_batch/systems.json \
-  --segment equilibration --run-steps 250000 --minimize-steps 2000
+  --segment equilibration --run-steps 250000
 ```
 
 This writes `candidate_001/conf/equilibration.conf` for each system, without starting NAMD. Use repeated `--sequence-id` options to select a subset. Pass repeated `--parameter` options only to replace the complete default parameter list; their order is preserved. Generated configurations check every input at run time.
 
-The template sets `wrapAll off`. NAMD 3.0.2 segfaults — silently, with no message and an empty stderr — while wrapping a solvated box once many molecules have crossed the periodic boundary since the previous frame, which happens at any realistic `dcdfreq`. Wrapping only rewrites output coordinates and does not affect the dynamics, so wrap at analysis time instead (VMD `pbc wrap`, MDAnalysis transformations). `--gpu-resident` enables NAMD 3 GPU-resident integration, which is considerably faster on a single GPU but silently disables features it cannot support; read the startup log before relying on it.
+The MD settings in `templates/namd.tcl` reproduce the proven `base.conf` from the previous version of this workflow (`testrun/automaticMD`) line for line, and the configure defaults match its values. `tests/test_md_setup.py` pins them, so a change there should be a deliberate decision. Keep minimization at the 200-step default: every run configured with `--minimize-steps 10000` segfaulted with no error message at its first trajectory write (step 25,000), while 200-step runs on the same systems did not. Why a longer minimization does this is not understood.
+
+`--gpu-resident` enables NAMD 3 GPU-resident integration. It is off by default because the proven configuration does not use it; on a V100 it measured only about 5–10% faster for a ~67,000-atom system. It also silently disables features it cannot support, so read the startup log before relying on it. GPU-resident (CUDA-accelerated) runs with the proven settings are planned for testing next.
 
 The example step counts illustrate configuration syntax; they are **not** a validated equilibration schedule. Choose minimization, equilibration, restraints, replicates, and production duration for your system. The supplied NPT template has no positional restraints or heating schedule; naming a segment `equilibration` does not establish equilibration.
 
 | Setting | Default |
 | --- | --- |
 | Timestep | 2 fs without HMR; 4 fs with HMR |
-| Output wrapping | off — see below |
 | GPU-resident integration | off; `--gpu-resident` enables it |
 | Minimization | 200 steps for a fresh start; 0 for a restart |
 | Run length | Required `--run-steps`, measured as additional steps |

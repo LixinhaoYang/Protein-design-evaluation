@@ -1,5 +1,8 @@
-# Experimental NPT segment. Run length and input/output settings are supplied above.
-# This is a configurable execution template, not a calibrated equilibration protocol.
+# NPT segment. Run length and input/output settings are supplied above.
+# The MD settings below reproduce base.conf from the previous version of this workflow
+# (testrun/automaticMD), which has run to completion on this cluster with NAMD 3.0.2.
+# Keep them in step with it: settings that NAMD treats as defaults are still left out,
+# so the two files diff cleanly.
 set case_dir [file normalize [file join [file dirname [info script]] ..]]
 set output_prefix [file join $case_dir out $segment]
 file mkdir [file dirname $output_prefix]
@@ -41,15 +44,10 @@ if {$restart_prefix ne ""} {
     temperature $temperature_k
 }
 
-# Output wrapping is off: NAMD 3.0.2 segfaults while wrapping a solvated box once
-# many molecules have crossed the boundary since the previous frame, which happens
-# at any realistic dcdfreq. Wrapping only rewrites output coordinates and does not
-# affect the dynamics, so wrap at analysis time instead (VMD "pbc wrap",
-# MDAnalysis transformations).
-wrapAll off
-wrapNearest off
+wrapAll on
+wrapNearest on
 exclude scaled1-4
-oneFourScaling 1.0
+1-4scaling 1.0
 cutoff 12.0
 switching on
 switchdist 10.0
@@ -57,7 +55,6 @@ pairlistdist 14.0
 vdwForceSwitching on
 timestep $timestep_fs
 rigidBonds all
-useSettle on
 nonbondedFreq 1
 fullElectFrequency 2
 stepspercycle 10
@@ -66,9 +63,7 @@ PMEGridSpacing 1.0
 langevin on
 langevinDamping 1.0
 langevinTemp $temperature_k
-# Group-based pressure is required with rigidBonds; NAMD forces it on regardless,
-# so state it explicitly rather than relying on that override.
-useGroupPressure yes
+useGroupPressure no
 useFlexibleCell no
 useConstantArea no
 langevinPiston on
@@ -77,8 +72,6 @@ langevinPistonPeriod 100.0
 langevinPistonDecay 50.0
 langevinPistonTemp $temperature_k
 outputName $output_prefix
-binaryoutput yes
-binaryrestart yes
 restartfreq $output_every
 dcdfreq $output_every
 xstFreq $output_every
