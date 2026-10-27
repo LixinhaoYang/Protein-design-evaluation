@@ -338,9 +338,34 @@ class SlurmTests(QuietTest):
             self.assertIn("--gres=gpu:TEST:2", text)
             self.assertIn("--dependency=afterok:123:456", text)
             self.assertIn("+p8", text)
-            self.assertIn("+setcpuaffinity +devices 0,1", text)
+            # Affinity and explicit devices are opt-in; see the two tests below.
+            self.assertNotIn("+setcpuaffinity", text)
+            self.assertNotIn("+devices", text)
             checked = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
             self.assertEqual(checked.returncode, 0, checked.stderr)
+
+    def test_cpu_affinity_and_devices_are_opt_in(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, case = fixture(Path(tmp))
+            config = case / "conf/initial.conf"
+            config.write_text("synthetic configuration\n")
+            result, _, err = self.invoke(slurm.main, [config, "--time", "1:00:00", "--cpus", "8",
+                "--gpus", "2", "--cpu-affinity", "--gpu-devices", "0,1"])
+            self.assertEqual(result, 0, err)
+            text = config.with_suffix(".slurm").read_text()
+            self.assertIn("+setcpuaffinity", text)
+            self.assertIn("+devices 0,1", text)
+
+    def test_no_partition_is_emitted_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, case = fixture(Path(tmp))
+            config = case / "conf/initial.conf"
+            config.write_text("synthetic configuration\n")
+            result, _, err = self.invoke(slurm.main, [config, "--time", "1:00:00"])
+            self.assertEqual(result, 0, err)
+            text = config.with_suffix(".slurm").read_text()
+            self.assertNotIn("--partition", text)
+            self.assertIn("--qos=inferno", text)
 
     def test_submit_requires_explicit_flag_and_passes_arguments_without_shell(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -388,3 +413,40 @@ class SlurmTests(QuietTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NamdTemplateTests(unittest.TestCase):
+    """Guard the NPT template settings that a real run depends on."""
+
+    def setUp(self):
+        self.template = (TEMPLATES / "namd.tcl").read_text()
+
+    def test_output_wrapping_is_disabled(self):
+        # NAMD 3.0.2 segfaults wrapping a solvated box at realistic dcdfreq values.
+        self.assertIn("wrapAll off", self.template)
+        self.assertIn("wrapNearest off", self.template)
+        self.assertNotIn("wrapAll on", self.template)
+
+    def test_group_pressure_is_enabled_for_rigid_bonds(self):
+        self.assertIn("rigidBonds all", self.template)
+        self.assertIn("useGroupPressure yes", self.template)
+
+    def test_deprecated_parameter_names_are_not_used(self):
+        self.assertNotIn("1-4scaling", self.template)
+        self.assertIn("oneFourScaling", self.template)
+
+    def test_gpu_resident_is_opt_in(self):
+        self.assertIn("if {$gpu_resident}", self.template)
+
+
+class GpuResidentConfigureTests(unittest.TestCase):
+    def test_flag_controls_the_emitted_setting(self):
+        for flag, expected in ((None, "set gpu_resident 0"), ("--gpu-resident", "set gpu_resident 1")):
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest, case = fixture(Path(tmp))
+                argv = ["--manifest", str(manifest), "--segment", "seg", "--run-steps", "1000"]
+                if flag:
+                    argv.append(flag)
+                self.assertEqual(configure.main(argv), 0)
+                text = (case / "conf/seg.conf").read_text()
+                self.assertIn(expected, text)

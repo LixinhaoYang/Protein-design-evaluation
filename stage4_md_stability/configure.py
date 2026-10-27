@@ -72,6 +72,7 @@ def configure(args) -> list[Path]:
             "timestep_fs": timestep, "run_steps": args.run_steps, "minimize_steps": minimize,
             "temperature_k": args.temperature, "pressure_bar": args.pressure_bar,
             "output_every": args.output_every, "energy_every": args.energy_every,
+            "gpu_resident": int(bool(args.gpu_resident)),
         }
         header = (f"# Generated experimental Stage 4 configuration for {metadata['sequence_id']}.\n"
                   f"# Additional MD time: {args.run_steps * timestep / 1e6:g} ns.\n"
@@ -104,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pressure-bar", type=positive_float, default=1.01325)
     parser.add_argument("--output-every", type=positive_int, default=25000, help="DCD/restart/cell output interval in steps")
     parser.add_argument("--energy-every", type=positive_int, default=5000)
+    parser.add_argument("--gpu-resident", action="store_true",
+                        help="enable NAMD 3 GPU-resident integration; requires a CUDA build and one GPU")
     args = parser.parse_args(argv)
     try:
         configure(args)

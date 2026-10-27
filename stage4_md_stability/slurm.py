@@ -64,8 +64,10 @@ def generate(args) -> list[Path]:
             options.append(("dependency", "afterok:" + args.dependency))
         body = "#!/usr/bin/env bash\n" + "".join(f"#SBATCH --{key}={shlex.quote(value)}\n" for key, value in options)
         namd_command = [args.namd, f"+p{args.cpus}"]
-        if args.gpus:
-            namd_command.extend(("+setcpuaffinity", "+devices", gpu_devices))
+        if args.gpus and args.cpu_affinity:
+            namd_command.append("+setcpuaffinity")
+        if args.gpus and args.gpu_devices:
+            namd_command.extend(("+devices", gpu_devices))
         namd_command.append(str(config))
         body += "set -euo pipefail\nexec " + shlex.join(namd_command) + "\n"
         if script.exists() and script.read_text() != body:
@@ -98,10 +100,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cpus", type=positive_int, default=6)
     parser.add_argument("--gpus", type=nonnegative_int, default=1)
     parser.add_argument("--gpu-type", default="H200", help="Slurm GPU type; default: H200")
-    parser.add_argument("--gpu-devices", help="NAMD-visible GPU IDs, e.g. 0 or 0,1; default: 0 through gpus-1")
+    parser.add_argument("--gpu-devices", help="NAMD-visible GPU IDs, e.g. 0 or 0,1; default: let NAMD choose")
+    parser.add_argument("--cpu-affinity", action="store_true",
+                        help="add +setcpuaffinity; leave off unless the allocation gives contiguous cores")
     parser.add_argument("--account", default="gts-jcgumbart-coda20")
-    parser.add_argument("--partition", default="embers")
-    parser.add_argument("--qos")
+    # No partition by default: sites that route GPU jobs by --gres reject an explicit
+    # one, and "embers" is a QOS rather than a partition on the cluster this targets.
+    parser.add_argument("--partition")
+    parser.add_argument("--qos", default="inferno")
     parser.add_argument("--dependency", help="afterok job IDs separated by colons; does not configure restart")
     parser.add_argument("--submit", action="store_true", help="actually call sbatch; default only writes scripts")
     args = parser.parse_args(argv)

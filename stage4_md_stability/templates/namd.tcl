@@ -41,10 +41,15 @@ if {$restart_prefix ne ""} {
     temperature $temperature_k
 }
 
-wrapAll on
-wrapNearest on
+# Output wrapping is off: NAMD 3.0.2 segfaults while wrapping a solvated box once
+# many molecules have crossed the boundary since the previous frame, which happens
+# at any realistic dcdfreq. Wrapping only rewrites output coordinates and does not
+# affect the dynamics, so wrap at analysis time instead (VMD "pbc wrap",
+# MDAnalysis transformations).
+wrapAll off
+wrapNearest off
 exclude scaled1-4
-1-4scaling 1.0
+oneFourScaling 1.0
 cutoff 12.0
 switching on
 switchdist 10.0
@@ -61,7 +66,9 @@ PMEGridSpacing 1.0
 langevin on
 langevinDamping 1.0
 langevinTemp $temperature_k
-useGroupPressure no
+# Group-based pressure is required with rigidBonds; NAMD forces it on regardless,
+# so state it explicitly rather than relying on that override.
+useGroupPressure yes
 useFlexibleCell no
 useConstantArea no
 langevinPiston on
@@ -77,6 +84,14 @@ dcdfreq $output_every
 xstFreq $output_every
 outputEnergies $energy_every
 outputPressure $energy_every
+
+# GPU-resident integration keeps the trajectory on the GPU between steps. It needs a
+# CUDA build and a single GPU, and silently disables features it cannot support, so
+# it stays opt-in. "CUDASOAintegrate" is the spelling NAMD 3.0.x accepts; 3.1 renames
+# it to "GPUresident".
+if {$gpu_resident} {
+    CUDASOAintegrate on
+}
 
 if {$restart_prefix eq "" && $minimize_steps > 0} {
     minimize $minimize_steps

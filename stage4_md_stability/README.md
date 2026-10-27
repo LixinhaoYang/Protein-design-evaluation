@@ -11,7 +11,7 @@ This stage prepares selected designs for optional MD simulations after fold/moti
 - Python 3.10+; the Stage 4 commands use the standard library.
 - VMD with PSFGEN, Solvate, and Autoionize plugins for system preparation. Supply its executable with `--vmd` or `VMD_BIN`.
 - The local default force field is `top_all36_prot.rtf` plus `toppar_water_ions.str` for PSF building, and `toppar_water_ions_modified.prm`, `par_all36m_prot.prm`, and `NBFIX.str` for NAMD. They are read from `/storage/home/hcoda1/9/lyang403/r-jcgumbart-0/ParamFiles`, or from `STAGE4_PARAMDIR` when set.
-- The local default NAMD executable is `/storage/project/r-jcgumbart-0/jcgumbart/software/NAMD_3.0.2_Linux-x86_64-multicore-CUDA/namd3`. It is a single-node CUDA build. The Slurm launcher runs one process with `+p` CPU threads, `+setcpuaffinity`, and explicit NAMD GPU devices; MPI/multi-node launchers are outside this template's scope.
+- The local default NAMD executable is `/storage/project/r-jcgumbart-0/jcgumbart/software/NAMD_3.0.2_Linux-x86_64-multicore-CUDA/namd3`. It is a single-node CUDA build. The Slurm launcher runs one process with `+p` CPU threads; `+setcpuaffinity` and explicit NAMD GPU devices are opt-in (`--cpu-affinity`, `--gpu-devices`), since pinning across a non-contiguous cgroup core set is a common source of trouble. MPI/multi-node launchers are outside this template's scope.
 - Slurm only if using the provided job-script generator.
 
 The preparer accepts one selected chain of standard amino acids in **PDB** format. Convert AF3 mmCIF files to PDB first with `cif_to_pdb.py` (§0) and verify chain IDs and residue numbering. Select whether the starting structure is from the design method or AF3 using `--source design|af3`; it is never inferred from the filename.
@@ -91,11 +91,15 @@ python stage4_md_stability/configure.py \
 
 This writes `candidate_001/conf/equilibration.conf` for each system, without starting NAMD. Use repeated `--sequence-id` options to select a subset. Pass repeated `--parameter` options only to replace the complete default parameter list; their order is preserved. Generated configurations check every input at run time.
 
+The template sets `wrapAll off`. NAMD 3.0.2 segfaults — silently, with no message and an empty stderr — while wrapping a solvated box once many molecules have crossed the periodic boundary since the previous frame, which happens at any realistic `dcdfreq`. Wrapping only rewrites output coordinates and does not affect the dynamics, so wrap at analysis time instead (VMD `pbc wrap`, MDAnalysis transformations). `--gpu-resident` enables NAMD 3 GPU-resident integration, which is considerably faster on a single GPU but silently disables features it cannot support; read the startup log before relying on it.
+
 The example step counts illustrate configuration syntax; they are **not** a validated equilibration schedule. Choose minimization, equilibration, restraints, replicates, and production duration for your system. The supplied NPT template has no positional restraints or heating schedule; naming a segment `equilibration` does not establish equilibration.
 
 | Setting | Default |
 | --- | --- |
 | Timestep | 2 fs without HMR; 4 fs with HMR |
+| Output wrapping | off — see below |
+| GPU-resident integration | off; `--gpu-resident` enables it |
 | Minimization | 200 steps for a fresh start; 0 for a restart |
 | Run length | Required `--run-steps`, measured as additional steps |
 | Temperature / pressure | 300 K / 1.01325 bar |
@@ -127,7 +131,7 @@ python stage4_md_stability/slurm.py results/md_batch/*/conf/equilibration.conf \
   --time 24:00:00
 ```
 
-By default this writes scripts requesting one H200 GPU, six CPU cores, the `embers` partition, and `gts-jcgumbart-coda20`; it runs the local CUDA NAMD 3 binary with `+setcpuaffinity +devices 0`. It only writes `.slurm` files and prints submission commands—it does not call `sbatch`. Override this setup with `--namd`, `--cpus`, `--gpus`, `--gpu-type`, `--gpu-devices`, `--account`, `--partition`, `--qos`, or `--dependency JOB_ID[:JOB_ID]` (using `afterok`).
+By default this writes scripts requesting one H200 GPU, six CPU cores, the `inferno` QOS, and `gts-jcgumbart-coda20`, and runs the local CUDA NAMD 3 binary with plain `+p`. No `--partition` is emitted by default: sites that route GPU jobs by `--gres` reject an explicit one, and on the cluster this targets `embers` is a QOS, not a partition. It only writes `.slurm` files and prints submission commands—it does not call `sbatch`. Override this setup with `--namd`, `--cpus`, `--gpus`, `--gpu-type`, `--gpu-devices`, `--cpu-affinity`, `--account`, `--partition`, `--qos`, or `--dependency JOB_ID[:JOB_ID]` (using `afterok`).
 
 Submit a generated script yourself using its printed `sbatch` command. Alternatively, repeat the generation command with `--submit` to submit explicitly. Identical scripts can be reused; existing scripts with different settings are not overwritten. A scheduler dependency orders jobs; it does not create restart inputs or configure continuation. Completed jobs and existing output prefixes must not be resubmitted as fresh starts.
 
