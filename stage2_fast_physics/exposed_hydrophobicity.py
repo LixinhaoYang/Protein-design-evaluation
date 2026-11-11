@@ -43,6 +43,15 @@ except ImportError:  # pragma: no cover
 DEFAULT_MIN_EXPOSED_SIDECHAIN_SASA = 10.0
 DEFAULT_PATCH_CONTACT_CUTOFF = 4.5
 
+# Exposure is read off a structure, so on a predicted structure it is only as good as the
+# prediction. A model the predictor got wrong is loose and reads as exposed whether or not
+# the design is. Measured case: a design whose ESMFold model scored pLDDT 55 sat 10.6 A
+# from its NMR structure while its own design model was 1.3 A from it -- the design was
+# right and the prediction was wrong, but the exposure flag saw only the wrong structure.
+# 70 is the conventional low-confidence line. pLDDT scales are not interchangeable between
+# predictors or averaging conventions, so re-check this against whatever produced the models.
+DEFAULT_MIN_PLDDT = 70.0
+
 CSV_COLUMNS = [
     "structure_id",
     "source",
@@ -52,9 +61,33 @@ CSV_COLUMNS = [
     "exposed_hydrophobic_fraction",
     "n_exposed_hydrophobic_residues",
     "max_hydrophobic_patch_sasa",
+    "mean_plddt",
+    "confidence_status",
     "flag_exposed_hydrophobicity",
     "total_flags",
 ]
+
+
+def mean_plddt_from_bfactor(path: Path) -> float | None:
+    """Mean of the B-factor column over CA atoms, or None when there are none.
+
+    AlphaFold and ESMFold write per-residue pLDDT into the B-factor column, so confidence
+    can be read straight from the model. **An experimental structure's B-factor column is
+    a temperature factor, not a confidence**, and would be misread here; that is why the
+    gate below is opt-in rather than automatic.
+    """
+    values: list[float] = []
+    with path.open() as fh:
+        for line in fh:
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            if line[12:16].strip() != "CA":
+                continue
+            try:
+                values.append(float(line[60:66]))
+            except ValueError:
+                continue
+    return sum(values) / len(values) if values else None
 
 
 def exposed_hydrophobic_metrics(
@@ -112,6 +145,7 @@ def summarize_pdbs(
     max_patch_sasa: float | None = None,
     patch_contact_cutoff: float = DEFAULT_PATCH_CONTACT_CUTOFF,
     sasa_points: int = 64,
+    min_plddt: float | None = None,
 ) -> list[dict]:
     rows: list[dict] = []
     for path in paths:
@@ -121,6 +155,17 @@ def summarize_pdbs(
             patch_contact_cutoff=patch_contact_cutoff,
             sasa_points=sasa_points,
         )
+        plddt = mean_plddt_from_bfactor(path) if min_plddt is not None else None
+        if min_plddt is None:
+            row["mean_plddt"] = ""
+            row["confidence_status"] = "not_checked"
+        elif plddt is None:
+            row["mean_plddt"] = ""
+            row["confidence_status"] = "no_confidence_in_file"
+        else:
+            row["mean_plddt"] = round(plddt, 2)
+            row["confidence_status"] = (
+                "trusted" if plddt >= min_plddt else "prediction_not_trusted")
         flag = int(
             (
                 max_exposed_hydro_per_res is not None
@@ -131,6 +176,10 @@ def summarize_pdbs(
                 and row["max_hydrophobic_patch_sasa"] > max_patch_sasa
             )
         )
+        # A model the predictor was unsure about yields no verdict rather than a flag:
+        # the metrics stay in the table as features, but they are not evidence here.
+        if row["confidence_status"] == "prediction_not_trusted":
+            flag = 0
         for key in (
             "exposed_hydrophobic_sasa",
             "exposed_hydrophobic_sasa_per_residue",
@@ -164,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--patch-contact-cutoff", type=float,
                         default=DEFAULT_PATCH_CONTACT_CUTOFF)
     parser.add_argument("--sasa-points", type=int, default=64)
+    parser.add_argument("--min-plddt", type=float, nargs="?", const=DEFAULT_MIN_PLDDT,
+                        default=None,
+                        help="treat the B-factor column as pLDDT and withhold the flag "
+                             f"below this value (bare flag uses {DEFAULT_MIN_PLDDT:g}); "
+                             "only for predicted structures -- an experimental B-factor "
+                             "is a temperature factor, not a confidence")
     parser.add_argument("--csv", type=Path)
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args(argv)
@@ -176,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             max_patch_sasa=args.max_patch_sasa,
             patch_contact_cutoff=args.patch_contact_cutoff,
             sasa_points=args.sasa_points,
+            min_plddt=args.min_plddt,
         )
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
